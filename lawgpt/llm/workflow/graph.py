@@ -32,7 +32,7 @@ def create_chat_workflow():
                 case_results = case_pipeline.search_by_text(user_message, limit=3)
                 logger.info(f"Case RAG: Retrieved {len(case_results)} results")
                 
-                for result in case_results:
+                for i, result in enumerate(case_results):
                     payload = result["payload"]
                     content = f"""
                     Case Title: {payload.get('case_title', '')}
@@ -48,6 +48,10 @@ def create_chat_workflow():
                         "content": content.strip(),
                         "score": result.get('score', 0)
                     })
+                    
+                    # Log truncated context preview
+                    preview = content.strip()[:100] + "..." if len(content.strip()) > 100 else content.strip()
+                    logger.info(f"Case RAG Result {i+1}: {preview}")
                 
                 logger.info(f"Case RAG: Successfully processed {len(case_results)} results into context")
             except Exception as e:
@@ -61,7 +65,7 @@ def create_chat_workflow():
                 law_results = law_pipeline.search_by_text(user_message, limit=3)
                 logger.info(f"Law RAG: Retrieved {len(law_results)} results")
                 
-                for result in law_results:
+                for i, result in enumerate(law_results):
                     payload = result["payload"]
                     content = f"""
                     Part Section: {payload.get('part_section', '')}
@@ -75,6 +79,10 @@ def create_chat_workflow():
                         "content": content.strip(),
                         "score": result.get('score', 0)
                     })
+                    
+                    # Log truncated context preview
+                    preview = content.strip()[:100] + "..." if len(content.strip()) > 100 else content.strip()
+                    logger.info(f"Law RAG Result {i+1}: {preview}")
                 
                 logger.info(f"Law RAG: Successfully processed {len(law_results)} results into context")
             except Exception as e:

@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  # Qdrant vector database
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: lawgpt-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - lawgpt-network
+
+  # LawGPT FastAPI application
+  lawgpt:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lawgpt-app
+    ports:
+      - "8000:8000"
+    environment:
+      # Qdrant configuration
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_API_KEY=
+      - QDRANT_LEGAL_CASES_COLLECTION_NAME=bd_legal_cases
+      - QDRANT_LAW_REFERENCE_COLLECTION_NAME=bd_law_reference
+      
+      # API Keys (set these in .env file)
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - CUSTOM_MODEL_URL=${CUSTOM_MODEL_URL:-https://junaid121dark--llama-3-1-legal-inference-v2-inference-api.modal.run}
+      - CUSTOM_MODEL_API_KEY=${CUSTOM_MODEL_API_KEY:-custom-api-key}
+      
+      # LangChain configuration
+      - LANGCHAIN_TRACING_V2=true
+      - LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
+      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
+      
+      # Environment
+      - ENVIRONMENT=production
+    volumes:
+      - ./data:/app/data:ro  # Mount law data as read-only
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - lawgpt-network
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+    driver: local
+
+networks:
+  lawgpt-network:
+    driver: bridge

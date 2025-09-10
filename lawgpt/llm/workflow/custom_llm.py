@@ -49,7 +49,7 @@ class CustomLLMAPI(BaseChatModel):
         
         # Default system prompt if none provided
         if system_prompt is None:
-            system_prompt = "You are a helpful legal assistant specializing in Bangladeshi law. Provide accurate, detailed responses in Bengali when appropriate."
+            system_prompt = "You are a helpful legal assistant specializing in Bangladeshi law. Provide accurate, detailed responses."
         
         # Prepare API payload following test_api.py format
         payload = {
@@ -186,11 +186,19 @@ class CustomLLMChatAgent:
             rag_context_text = ""
             if rag_context:
                 context_parts = []
-                for item in rag_context:
+                for i, item in enumerate(rag_context):
                     if item.get("type") == "case":
-                        context_parts.append(f"Legal Case: {item.get('content', '')}")
+                        content = item.get('content', '')
+                        context_parts.append(f"Legal Case: {content}")
+                        # Log truncated context preview
+                        preview = content[:100] + "..." if len(content) > 100 else content
+                        logger.info(f"RAG Context Item {i+1} (Case): {preview}")
                     elif item.get("type") == "law":
-                        context_parts.append(f"Law Reference: {item.get('content', '')}")
+                        content = item.get('content', '')
+                        context_parts.append(f"Law Reference: {content}")
+                        # Log truncated context preview
+                        preview = content[:100] + "..." if len(content) > 100 else content
+                        logger.info(f"RAG Context Item {i+1} (Law): {preview}")
                 
                 if context_parts:
                     rag_context_text = f"\n\nRelevant Context:\n{chr(10).join(context_parts)}"

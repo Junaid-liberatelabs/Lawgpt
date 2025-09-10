@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     QDRANT_LAW_REFERENCE_COLLECTION_NAME: Optional[str] = "bd_law_reference"
 
     # Custom model settings (for Modal deployment)
-    CUSTOM_MODEL_URL: Optional[str] = "https://junaid121dark--llama-3-1-legal-inference-v2-inference-api.modal.run"
+    CUSTOM_MODEL_URL: Optional[str] = None
     CUSTOM_MODEL_API_KEY: Optional[str] = "custom-api-key"
 
 

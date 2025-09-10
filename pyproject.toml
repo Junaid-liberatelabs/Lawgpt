@@ -1,0 +1,20 @@
+[project]
+name = "lawgpt"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dotenv>=0.9.9",
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-google-genai>=2.1.10",
+    "langchain-openai>=0.2.11",
+    "qdrant-client>=1.11.3",
+    "pydantic>=2.11.7",
+    "pydantic-settings>=2.10.1",
+    "langgraph>=0.6.6",
+    "fastapi>=0.115.2",
+    "uvicorn>=0.31.1",
+    "pyyaml>=6.0.0",
+]

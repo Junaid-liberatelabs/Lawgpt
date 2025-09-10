@@ -40,7 +40,8 @@ def start_server():
             "lawgpt.main:app",
             "--host", "0.0.0.0",
             "--port", "8000", 
-            "--reload"
+            "--reload",
+            "--log-level", "info"
         ], check=True)
     except subprocess.CalledProcessError as e:
         print(f"❌ Failed to start server: {e}")

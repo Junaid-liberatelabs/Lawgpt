@@ -18,7 +18,7 @@ def create_chat_workflow():
     # Define workflow nodes
     async def rag_node(state: ChatState) -> ChatState:
         """Node to handle RAG retrieval based on flags"""
-        logger.info(f"RAG node starting - case_rag: {state['is_case_rag']}, law_rag: {state['is_law_rag']}")
+        logger.info(f"🚀 RAG node starting - case_rag: {state['is_case_rag']}, law_rag: {state['is_law_rag']}")
         
         rag_context = []
         user_message = state["messages"][-1].content
@@ -51,7 +51,7 @@ def create_chat_workflow():
                     
                     # Log truncated context preview
                     preview = content.strip()[:100] + "..." if len(content.strip()) > 100 else content.strip()
-                    logger.info(f"Case RAG Result {i+1}: {preview}")
+                    logger.info(f"📋 Case RAG Result {i+1}: {preview}")
                 
                 logger.info(f"Case RAG: Successfully processed {len(case_results)} results into context")
             except Exception as e:
@@ -82,7 +82,7 @@ def create_chat_workflow():
                     
                     # Log truncated context preview
                     preview = content.strip()[:100] + "..." if len(content.strip()) > 100 else content.strip()
-                    logger.info(f"Law RAG Result {i+1}: {preview}")
+                    logger.info(f"📜 Law RAG Result {i+1}: {preview}")
                 
                 logger.info(f"Law RAG: Successfully processed {len(law_results)} results into context")
             except Exception as e:

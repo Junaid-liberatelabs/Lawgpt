@@ -10,7 +10,23 @@ from lawgpt.api.endpoint.chat import router as chat_router
 from lawgpt.core.config import settings
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),  # This ensures logs go to console
+    ],
+    force=True  # Force reconfiguration to override uvicorn's logging
+)
+
+# Set specific loggers to INFO level
+logging.getLogger("lawgpt").setLevel(logging.INFO)
+logging.getLogger("lawgpt.llm").setLevel(logging.INFO)
+logging.getLogger("lawgpt.llm.workflow").setLevel(logging.INFO)
+logging.getLogger("lawgpt.llm.workflow.graph").setLevel(logging.INFO)
+logging.getLogger("lawgpt.llm.workflow.agent").setLevel(logging.INFO)
+logging.getLogger("lawgpt.llm.workflow.custom_llm").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +34,8 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan manager"""
     # Startup
-    logger.info("Starting LawGPT application...")
+    logger.info("🚀 Starting LawGPT application...")
+    logger.info("📝 Logging system initialized - RAG context logs will be visible")
     
     # Initialize session workflows storage
     

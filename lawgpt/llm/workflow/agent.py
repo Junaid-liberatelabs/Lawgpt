@@ -63,7 +63,7 @@ class ChatAgent:
         if model_id == "gemini":
             logger.info("Initializing ChatGoogleGenerativeAI with gemini-2.0-flash-exp")
             return ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash-exp", 
+                model="gemini-2.0-flash-lite", 
                 temperature=0,
                 google_api_key=settings.GOOGLE_API_KEY
             )
@@ -102,13 +102,13 @@ class ChatAgent:
                         context_parts.append(f"Legal Case: {content}")
                         # Log truncated context preview
                         preview = content[:100] + "..." if len(content) > 100 else content
-                        logger.info(f"RAG Context Item {i+1} (Case): {preview}")
+                        logger.info(f"🔍 RAG Context Item {i+1} (Case): {preview}")
                     elif item.get("type") == "law":
                         content = item.get('content', '')
                         context_parts.append(f"Law Reference: {content}")
                         # Log truncated context preview
                         preview = content[:100] + "..." if len(content) > 100 else content
-                        logger.info(f"RAG Context Item {i+1} (Law): {preview}")
+                        logger.info(f"🔍 RAG Context Item {i+1} (Law): {preview}")
                 
                 if context_parts:
                     context_text = f"\n\nRelevant Context:\n{chr(10).join(context_parts)}"

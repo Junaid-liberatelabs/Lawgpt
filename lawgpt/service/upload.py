@@ -16,7 +16,7 @@ def main():
     """Main function to upload legal cases to Qdrant"""
     
     # Optional start index to resume from (0-based). Can be passed as --start N
-    start_index = 4450
+    start_index = 100
     if len(sys.argv) > 1:
         # very small arg parser to keep changes minimal
         args = sys.argv[1:]
@@ -41,7 +41,7 @@ def main():
                         return 1
 
     # Path to the JSON file
-    json_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "bd_legal_cases_complete.json")
+    json_file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "bd_legal_cases_part3.json")
     
     # Check if file exists
     if not os.path.exists(json_file_path):
@@ -110,7 +110,7 @@ def main():
             test_results = pipeline.search_by_text("administrative tribunal", limit=2)
             if test_results:
                 print(f"✅ Search test successful! Found {len(test_results)} results.")
-                print(f"🎯 Top result: {test_results[0]['payload'].get('case_title', 'N/A')[:80]}...")
+                print(f"🎯 Top result: {test_results[0]['metadata'].get('case_title', 'N/A')[:80]}...")
             else:
                 print("⚠️  Search test returned no results.")
             

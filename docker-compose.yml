@@ -30,27 +30,10 @@ services:
     container_name: lawgpt-app
     ports:
       - "8000:8000"
+    env_file: .env
     environment:
-      # Qdrant configuration
+      # Override for in-container networking
       - QDRANT_URL=http://qdrant:6333
-      - QDRANT_API_KEY=
-      - QDRANT_LEGAL_CASES_COLLECTION_NAME=bd_legal_cases
-      - QDRANT_LAW_REFERENCE_COLLECTION_NAME=bd_law_reference
-      
-      # API Keys (set these in .env file)
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
-      - CUSTOM_MODEL_URL=${CUSTOM_MODEL_URL:-https://junaid121dark--llama-3-1-legal-inference-v2-inference-api.modal.run}
-      - CUSTOM_MODEL_API_KEY=${CUSTOM_MODEL_API_KEY:-custom-api-key}
-      
-      # LangChain configuration
-      - LANGCHAIN_TRACING_V2=true
-      - LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
-      - LANGCHAIN_API_KEY=${LANGCHAIN_API_KEY}
-      - LANGCHAIN_PROJECT=${LANGCHAIN_PROJECT}
-      
-      # Environment
-      - ENVIRONMENT=production
     volumes:
       - ./data:/app/data:ro  # Mount law data as read-only
     depends_on:

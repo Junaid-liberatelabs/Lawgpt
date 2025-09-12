@@ -32,9 +32,9 @@ def test_api(user_prompt, system_prompt=None, chat_history=None, rag_context="",
         "chat_history": chat_history,
         "rag_context": rag_context,
         "max_new_tokens": max_tokens,
-        "temperature": 0.8,
-        "top_p": 0.9,
-        "do_sample": True
+        "temperature": 0.7,
+        # "top_p": 0.9,
+        # "do_sample": True
     }
     
     print(f"🔍 Testing API with prompt: {user_prompt[:50]}...")

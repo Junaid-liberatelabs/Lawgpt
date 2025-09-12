@@ -55,7 +55,7 @@ class CustomLLMAPI(BaseChatModel):
         payload = {
             "user_prompt": user_prompt,
             "system_prompt": system_prompt,
-            "chat_history": [],  # Always empty - no chat history
+            # "chat_history": [],  # Always empty - no chat history
             "rag_context": rag_context,
             "max_new_tokens": 2048,
         }
@@ -80,22 +80,21 @@ class CustomLLMAPI(BaseChatModel):
             # Format messages for API
             payload = self._format_messages_for_api(messages, rag_context)
             
-            logger.info(f"Sending request to custom LLM API: {self.api_url}")
-            logger.info(f"Request details - user_prompt_length: {len(payload['user_prompt'])}, system_prompt_length: {len(payload['system_prompt'])}, rag_context_length: {len(payload['rag_context'])}")
+            logger.info(f"📤 Sending to LLM API ({len(payload['user_prompt'])} chars)")
             
             # Make API request
             response = requests.post(
                 self.api_url,
                 json=payload,
                 headers={"Content-Type": "application/json"},
-                timeout=300  # 5 minute timeout
+                timeout=420  # 6 minute timeout
             )
             
             if response.status_code == 200:
                 result = response.json()
                 assistant_response = result.get('response', '')
                 
-                logger.info(f"Custom LLM API response received. Model: {result.get('model_name', 'unknown')}, response_length: {len(assistant_response)}, inference_time: {result.get('inference_time', 0):.2f}s")
+                logger.info(f"📥 LLM response received ({len(assistant_response)} chars)")
                 
                 # Return in LangChain format
                 generation = ChatGeneration(message=AIMessage(content=assistant_response))
@@ -108,7 +107,7 @@ class CustomLLMAPI(BaseChatModel):
                 return ChatResult(generations=[generation])
                 
         except requests.exceptions.Timeout:
-            error_msg = "Custom LLM API request timed out (>5 minutes)"
+            error_msg = "Custom LLM API request timed out (>6 minutes)"
             logger.error(error_msg)
             generation = ChatGeneration(message=AIMessage(content=f"I apologize, but the request timed out: {error_msg}"))
             return ChatResult(generations=[generation])
@@ -180,7 +179,7 @@ class CustomLLMChatAgent:
         Generate response using custom LLM - Stateless, no chat history
         """
         try:
-            logger.info(f"CustomLLMChatAgent generating response - user_input_length: {len(user_input)}, rag_items: {len(rag_context) if rag_context else 0}")
+            logger.info(f"CustomLLM processing {len(rag_context) if rag_context else 0} context items")
             
             # Prepare RAG context string if available
             rag_context_text = ""
@@ -189,20 +188,21 @@ class CustomLLMChatAgent:
                 for i, item in enumerate(rag_context):
                     if item.get("type") == "case":
                         content = item.get('content', '')
-                        context_parts.append(f"Legal Case: {content}")
-                        # Log truncated context preview
-                        preview = content[:100] + "..." if len(content) > 100 else content
-                        logger.info(f"🔍 RAG Context Item {i+1} (Case): {preview}")
+                        context_parts.append(f"{content}")
+                        # Log only first case and law for brevity
+                        if i == 0:
+                            preview = content[:60] + "..." if len(content) > 60 else content
+                            logger.info(f"🔍 Context: {preview}")
                     elif item.get("type") == "law":
                         content = item.get('content', '')
-                        context_parts.append(f"Law Reference: {content}")
-                        # Log truncated context preview
-                        preview = content[:100] + "..." if len(content) > 100 else content
-                        logger.info(f"🔍 RAG Context Item {i+1} (Law): {preview}")
+                        context_parts.append(f"{content}")
+                        # Log only first law if no case was logged
+                        if i == 0 and not any(item.get("type") == "case" for item in rag_context[:i]):
+                            preview = content[:60] + "..." if len(content) > 60 else content
+                            logger.info(f"🔍 Context: {preview}")
                 
                 if context_parts:
-                    rag_context_text = f"\n\nRelevant Context:\n{chr(10).join(context_parts)}"
-                    logger.info(f"Prepared RAG context with {len(context_parts)} items, total_length: {len(rag_context_text)}")
+                    rag_context_text = f"\n\nRAG context:\n{chr(10).join(context_parts)}"
             
             # Prepare messages for the LLM
             messages = [
@@ -217,7 +217,6 @@ class CustomLLMChatAgent:
             )
             
             response_content = result.generations[0].message.content
-            logger.info(f"CustomLLMChatAgent response generated successfully - response_length: {len(response_content)}")
             return response_content
             
         except Exception as e:

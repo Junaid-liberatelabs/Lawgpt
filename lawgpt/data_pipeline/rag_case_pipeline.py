@@ -5,6 +5,7 @@ from typing import List, Dict, Any, Optional
 from qdrant_client import QdrantClient, models
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from lawgpt.core.config import settings
+from lawgpt.llm.case_summarizer.case_summarizer import CaseSummarizerAgent
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +24,9 @@ class CaseRAGPipeline:
         self.embeddings = GoogleGenerativeAIEmbeddings(
             model="models/gemini-embedding-001"
         )
+        
+        # Initialize case summarizer
+        self.case_summarizer = CaseSummarizerAgent()
         
         self._ensure_collection_exists()
     
@@ -48,12 +52,13 @@ class CaseRAGPipeline:
     
     def add_cases(self, json_file_path: str, batch_size: int = 50, verbose: bool = True, start_index: int = 0) -> bool:
         """
-        Load legal cases from JSON file and add them to Qdrant with progress tracking
+        Load legal cases from JSON file, summarize case details, and add them to Qdrant with progress tracking
         
         Args:
             json_file_path: Path to the JSON file containing legal cases
             batch_size: Number of cases to process in each batch
             verbose: Whether to show detailed progress
+            start_index: Index to start processing from (0-based)
             
         Returns:
             True if successful, False otherwise
@@ -71,13 +76,14 @@ class CaseRAGPipeline:
                     print(f"ℹ️  start_index {start_index} is beyond total cases ({total_cases}). Nothing to do.")
                 return True
 
-            processed_count = 0 if start_index == 0 else 0
+            processed_count = 0
             
             if verbose:
                 if start_index > 0:
                     print(f"📋 Resuming processing from case {start_index + 1} of {total_cases} in batches of {batch_size}")
                 else:
                     print(f"📋 Processing {total_cases} cases in batches of {batch_size}")
+                print(f"🤖 Using case summarizer to process case details before embedding")
             
             # Process cases in batches (respect start_index)
             for batch_start in range(start_index, total_cases, batch_size):
@@ -88,26 +94,49 @@ class CaseRAGPipeline:
                     print(f"🔄 Processing batch {batch_start//batch_size + 1}/{(total_cases + batch_size - 1)//batch_size} (cases {batch_start + 1}-{batch_end})")
                 
                 points = []
+                
                 for idx, case in enumerate(batch_cases):
                     case_id = batch_start + idx
                     
-                    # Create comprehensive text content for embedding
-                    content = self._create_case_content(case)
-                    
                     if verbose and (idx + 1) % 10 == 0:
-                        print(f"  📝 Embedding case {case_id + 1}: {case.get('case-title', 'N/A')[:60]}...")
+                        print(f"  📝 Processing case {case_id + 1}: {case.get('case-title', 'N/A')[:60]}...")
                     
-                    # Generate text embedding
-                    text_embedding = self.embeddings.embed_query(content)
-                    
-                    # Create metadata payload
-                    payload = {
+                    # Extract case metadata
+                    case_metadata = {
                         "case_title": case.get("case-title", ""),
                         "division": case.get("division", ""),
                         "law_category": case.get("law_category", ""),
                         "law_act": case.get("law_act", ""),
-                        "reference": case.get("reference", ""),
-                        "case_details": case.get("case-details", "")
+                        "reference": case.get("reference", "")
+                    }
+                    
+                    # Get case details and summarize if present
+                    case_details = case.get("case-details", "")
+                    summarized_details = ""
+                    
+                    if case_details:
+                        if verbose and idx == 0:  # Show summarization message only for first case in batch
+                            print(f"  🤖 Summarizing case details...")
+                        
+                        try:
+                            # Use case summarizer to get concise summary
+                            summarized_details = self.case_summarizer.summarize_case(case_details)
+                        except Exception as e:
+                            logger.warning(f"Failed to summarize case {case_id + 1}: {e}. Using original details.")
+                            summarized_details = case_details[:500]  # Fallback to truncated original
+                    
+                    # Create comprehensive content for embedding with summarized details
+                    content = self._create_case_content_with_summary(case, summarized_details)
+                    
+                    # Generate text embedding for complete content
+                    text_embedding = self.embeddings.embed_query(content)
+                    
+                    # Create metadata payload
+                    payload = {
+                        **case_metadata,
+                        "case_details": summarized_details,  # Store summarized details
+                        "original_case_details": case_details[:200] + "..." if len(case_details) > 200 else case_details,  # Keep snippet of original
+                        "content": content  # Store the complete content for retrieval
                     }
                     
                     # Create point for Qdrant
@@ -146,9 +175,31 @@ class CaseRAGPipeline:
                 print(f"❌ Error: {e}")
             return False
     
+    def _create_case_content_with_summary(self, case: Dict[str, Any], summarized_details: str) -> str:
+        """
+        Create comprehensive text content for a case to be embedded using summarized details
+        
+        Args:
+            case: Dictionary containing case information
+            summarized_details: Summarized case details
+            
+        Returns:
+            Formatted text content with summarized details
+        """
+        content_parts = [
+            f"Case Title: {case.get('case-title', '')}",
+            f"Division: {case.get('division', '')}",
+            f"Law Category: {case.get('law_category', '')}",
+            f"Law Act: {case.get('law_act', '')}",
+            f"Reference: {case.get('reference', '')}",
+            f"Case Details: {summarized_details}"
+        ]
+        
+        return "\n".join(content_parts)
+    
     def _create_case_content(self, case: Dict[str, Any]) -> str:
         """
-        Create comprehensive text content for a case to be embedded
+        Create comprehensive text content for a case to be embedded (fallback method)
         
         Args:
             case: Dictionary containing case information
@@ -169,11 +220,11 @@ class CaseRAGPipeline:
     
     def search_by_text(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """
-        Search for similar cases using text query
+        Search for similar cases using text query.
         
         Args:
             query: Text query to search for
-            limit: Maximum number of results to return
+            limit: Maximum number of cases to return
             
         Returns:
             List of matching cases with scores
@@ -187,17 +238,40 @@ class CaseRAGPipeline:
                 with_payload=True,
                 limit=limit
             )
-            #reverse sort the results by higher score first
+            
+            # Sort results by score (highest first)
             results.points = sorted(results.points, key=lambda x: x.score, reverse=True)
             
-            return [
-                {
-                    "payload": point.payload,
+            # Format results for consumption by the LLM
+            formatted_results = []
+            for point in results.points:
+                # Use the stored content
+                content = point.payload.get("content", "")
+                if not content:
+                    # Fallback - reconstruct content from stored details
+                    content = f"Case Title: {point.payload.get('case_title', '')}\n"
+                    content += f"Division: {point.payload.get('division', '')}\n"
+                    content += f"Law Category: {point.payload.get('law_category', '')}\n"
+                    content += f"Law Act: {point.payload.get('law_act', '')}\n"
+                    content += f"Reference: {point.payload.get('reference', '')}\n"
+                    content += f"Case Details: {point.payload.get('case_details', '')}"
+                
+                formatted_results.append({
+                    "type": "case",
+                    "content": content,
+                    "metadata": {
+                        "case_title": point.payload.get("case_title", ""),
+                        "division": point.payload.get("division", ""),
+                        "law_category": point.payload.get("law_category", ""),
+                        "law_act": point.payload.get("law_act", ""),
+                        "reference": point.payload.get("reference", ""),
+                        "case_details": point.payload.get("case_details", "")  # Only summarized details
+                    },
                     "score": point.score,
                     "id": point.id
-                }
-                for point in results.points
-            ]
+                })
+            
+            return formatted_results
             
         except Exception as e:
             logger.error(f"Failed to search by text: {e}")

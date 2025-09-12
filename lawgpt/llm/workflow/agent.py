@@ -80,18 +80,16 @@ class ChatAgent:
     
     async def generate_response(self, user_input: str, rag_context: list = None) -> str:
         """Generate response using the configured LLM - Stateless"""
-        logger.info(f"ChatAgent generating response - model: {self.model_id}, user_input_length: {len(user_input)}, rag_items: {len(rag_context) if rag_context else 0}")
+        logger.info(f"ChatAgent processing {len(rag_context) if rag_context else 0} context items")
         try:
             # Handle custom LLM differently 
             if self.model_id == "custom_llm":
-                logger.info("Delegating to CustomLLMChatAgent for response generation")
                 return await self.custom_agent.generate_response(
                     user_input=user_input,
                     rag_context=rag_context
                 )
             
             # Standard LLM handling (gemini, openai)
-            logger.info(f"Standard LLM processing for model: {self.model_id}")
             # Prepare context if RAG results are available
             context_text = ""
             if rag_context:
@@ -99,31 +97,29 @@ class ChatAgent:
                 for i, item in enumerate(rag_context):
                     if item.get("type") == "case":
                         content = item.get('content', '')
-                        context_parts.append(f"Legal Case: {content}")
-                        # Log truncated context preview
-                        preview = content[:100] + "..." if len(content) > 100 else content
-                        logger.info(f"🔍 RAG Context Item {i+1} (Case): {preview}")
+                        context_parts.append(f"{content}")
+                        # Log only first case and law for brevity
+                        if i == 0:
+                            preview = content[:60] + "..." if len(content) > 60 else content
+                            logger.info(f"🔍 Context: {preview}")
                     elif item.get("type") == "law":
                         content = item.get('content', '')
-                        context_parts.append(f"Law Reference: {content}")
-                        # Log truncated context preview
-                        preview = content[:100] + "..." if len(content) > 100 else content
-                        logger.info(f"🔍 RAG Context Item {i+1} (Law): {preview}")
+                        context_parts.append(f"{content}")
+                        # Log only first law if no case was logged
+                        if i == 0 and not any(item.get("type") == "case" for item in rag_context[:i]):
+                            preview = content[:60] + "..." if len(content) > 60 else content
+                            logger.info(f"🔍 Context: {preview}")
                 
                 if context_parts:
                     context_text = f"\n\nRelevant Context:\n{chr(10).join(context_parts)}"
-                    logger.info(f"Prepared RAG context with {len(context_parts)} items, total_length: {len(context_text)}")
             
             # Combine user input with context
             full_input = user_input + context_text
-            logger.info(f"Generated full input with length: {len(full_input)}")
             
             # Generate response
             prompt = self.prompt_template.format_messages(user_input=full_input)
-            logger.info(f"Formatted prompt for {self.model_id}, invoking LLM...")
             response = await self.llm.ainvoke(prompt)
             
-            logger.info(f"ChatAgent response generated successfully - model: {self.model_id}, response_length: {len(response.content)}")
             return response.content
             
         except Exception as e:

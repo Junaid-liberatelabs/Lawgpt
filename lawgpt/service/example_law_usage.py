@@ -69,10 +69,19 @@ def main():
             
             if results:
                 for i, result in enumerate(results, 1):
-                    payload = result['payload']
-                    print(f"\n{i}. {payload.get('part_section', 'N/A')}")
+                    metadata = result.get('metadata', {})
+                    content = result.get('content', '')
+                    
+                    print(f"\n{i}. {metadata.get('part_section', 'N/A')}")
                     print(f"   Similarity Score: {result['score']:.3f}")
-                    print(f"   Law Text: {payload.get('law_text', 'N/A')}...")
+                    
+                    # Show chunk information if available
+                    if metadata.get('is_chunked'):
+                        chunk_info = f" (Chunk {metadata.get('chunk_index', 0) + 1}/{metadata.get('total_chunks', 1)})"
+                        print(f"   Chunk Info:{chunk_info}")
+                    
+                    # Show only the relevant chunk content, not the full law text
+                    print(f"   Law Text: {content}")
             else:
                 print("No similar law references found.")
         

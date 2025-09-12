@@ -28,8 +28,8 @@ class LawRAGPipeline:
         
         # Initialize text splitter for chunking large law texts
         self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=8000,  # Conservative chunk size to stay well under embedding limits
-            chunk_overlap=200,  # Small overlap to maintain context
+            chunk_size=1000,  # Conservative chunk size to stay well under embedding limits
+            chunk_overlap=100,  # Small overlap to maintain context
             length_function=len
         )
         
@@ -116,7 +116,8 @@ class LawRAGPipeline:
                         # Create metadata payload with chunk information
                         payload = {
                             "part_section": chunk_data["part_section"],
-                            "law_text": law_ref.get("law_text", ""),
+                            "law_text": law_ref.get("law_text", ""),  # Keep full text for reference
+                            "chunk_content": chunk_data["chunk_content"],  # Store actual chunk content
                             "chunk_index": chunk_data["chunk_index"],
                             "total_chunks": chunk_data["total_chunks"],
                             "is_chunked": chunk_data["total_chunks"] > 1
@@ -276,7 +277,8 @@ class LawRAGPipeline:
                                 # Create metadata payload with chunk information
                                 payload = {
                                     "part_section": chunk_data["part_section"],
-                                    "law_text": law_ref.get("law_text", ""),
+                                    "law_text": law_ref.get("law_text", ""),  # Keep full text for reference
+                                    "chunk_content": chunk_data["chunk_content"],  # Store actual chunk content
                                     "chunk_index": chunk_data["chunk_index"],
                                     "total_chunks": chunk_data["total_chunks"],
                                     "is_chunked": chunk_data["total_chunks"] > 1
@@ -356,13 +358,14 @@ class LawRAGPipeline:
         law_text = law_ref.get('law_text', '')
         
         # Check if the law text needs chunking
-        if len(law_text) <= 7000:  # If small enough, don't chunk
+        if len(law_text) <= 1000:  # If small enough, don't chunk (lowered threshold for small models)
             logger.debug(f"Law text for '{part_section[:50]}...' is small enough ({len(law_text)} chars), no chunking needed")
             return [{
                 "content": f"Part Section: {part_section}\nLaw Text: {law_text}",
                 "part_section": part_section,
                 "chunk_index": 0,
-                "total_chunks": 1
+                "total_chunks": 1,
+                "chunk_content": law_text  # Store the actual chunk content
             }]
         
         # Split the law text into chunks
@@ -378,7 +381,8 @@ class LawRAGPipeline:
                 "content": content,
                 "part_section": part_section,
                 "chunk_index": i,
-                "total_chunks": len(chunks)
+                "total_chunks": len(chunks),
+                "chunk_content": chunk  # Store the actual chunk content separate from full content
             })
         
         logger.info(f"Created {len(chunks)} chunks for '{part_section[:50]}...'")
@@ -407,14 +411,30 @@ class LawRAGPipeline:
             # Sort results by higher score first
             results.points = sorted(results.points, key=lambda x: x.score, reverse=True)
             
-            return [
-                {
-                    "payload": point.payload,
+            # Format results to prioritize chunk content
+            formatted_results = []
+            for point in results.points:
+                # Use chunk content if available, otherwise fall back to full law_text
+                chunk_content = point.payload.get("chunk_content", "")
+                if not chunk_content:
+                    # Fallback for legacy data without chunk_content
+                    chunk_content = point.payload.get("law_text", "")
+                
+                formatted_results.append({
+                    "type": "law",
+                    "content": chunk_content,  # Return only the relevant chunk content
+                    "metadata": {
+                        "part_section": point.payload.get("part_section", ""),
+                        "chunk_index": point.payload.get("chunk_index", 0),
+                        "total_chunks": point.payload.get("total_chunks", 1),
+                        "is_chunked": point.payload.get("is_chunked", False)
+                    },
                     "score": point.score,
-                    "id": point.id
-                }
-                for point in results.points
-            ]
+                    "id": point.id,
+                    "payload": point.payload  # Keep for backward compatibility
+                })
+            
+            return formatted_results
             
         except Exception as e:
             logger.error(f"Failed to search by text: {e}")

@@ -8,7 +8,7 @@ This script demonstrates how to:
 """
 
 import os
-from rag_case_pipeline import CaseRAGPipeline
+from lawgpt.data_pipeline.rag_case_pipeline import CaseRAGPipeline
 
 
 def main():
@@ -38,6 +38,11 @@ def main():
             print(f"Collection already contains {collection_info['vectors_count']} cases")
         
         # Example searches
+        search_queries = [
+            "administrative tribunal jurisdiction",
+            "service dismissal",
+            "administrative tribunal jurisdiction",
+        ]
        
         
         print("\n" + "="*50)
@@ -49,16 +54,17 @@ def main():
             print("-" * 40)
             
             results = pipeline.search_by_text(query=query, limit=3)
+            print(results)
             
             if results:
                 for i, result in enumerate(results, 1):
-                    payload = result['payload']
-                    print(f"\n{i}. {payload.get('case_title', 'N/A')}")
-                    print(f"   Division: {payload.get('division', 'N/A')}")
-                    print(f"   Law Act: {payload.get('law_act', 'N/A')}")
-                    print(f"   Reference: {payload.get('reference', 'N/A')}")
+                    metadata = result['metadata']
+                    print(f"\n{i}. {metadata.get('case_title', 'N/A')}")
+                    print(f"   Division: {metadata.get('division', 'N/A')}")
+                    print(f"   Law Act: {metadata.get('law_act', 'N/A')}")
+                    print(f"   Reference: {metadata.get('reference', 'N/A')}")
                     print(f"   Similarity Score: {result['score']:.3f}")
-                    print(f"   Details: {payload.get('case_details', 'N/A')[:200]}...")
+                    print(f"   Case Details: {metadata.get('case_details', 'N/A')}...")
             else:
                 print("No similar cases found.")
         

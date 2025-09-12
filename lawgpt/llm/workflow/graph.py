@@ -22,84 +22,77 @@ def create_chat_workflow():
         
         rag_context = []
         user_message = state["messages"][-1].content
-        logger.info(f"RAG node processing message - length: {len(user_message)}, user_message_preview: {user_message[:100]}{'...' if len(user_message) > 100 else ''}")
+        logger.info(f"RAG processing: '{user_message[:50]}{'...' if len(user_message) > 50 else ''}'")
         
         # Case RAG
         if state["is_case_rag"]:
             try:
-                logger.info("Case RAG: Initializing pipeline and searching...")
                 case_pipeline = CaseRAGPipeline()
-                case_results = case_pipeline.search_by_text(user_message, limit=3)
-                logger.info(f"Case RAG: Retrieved {len(case_results)} results")
+                case_results = case_pipeline.search_by_text(user_message, limit=2)
                 
                 for i, result in enumerate(case_results):
-                    payload = result["payload"]
+                    metadata = result["metadata"]
                     content = f"""
-                    Case Title: {payload.get('case_title', '')}
-                    Division: {payload.get('division', '')}
-                    Law Category: {payload.get('law_category', '')}
-                    Law Act: {payload.get('law_act', '')}
-                    Reference: {payload.get('reference', '')}
-                    Case Details: {payload.get('case_details', '')}
+                    Case Title: {metadata.get('case_title', '')}
+                    Division: {metadata.get('division', '')}
+                    Law Category: {metadata.get('law_category', '')}
+                    Law Act: {metadata.get('law_act', '')}
+                    Reference: {metadata.get('reference', '')}
+                    Case Summary: {metadata.get('case_details', '')}
                     """
                     
                     rag_context.append({
                         "type": "case",
-                        "content": content.strip(),
-                        "score": result.get('score', 0)
+                        "content": content.strip()
                     })
                     
-                    # Log truncated context preview
-                    preview = content.strip()[:100] + "..." if len(content.strip()) > 100 else content.strip()
-                    logger.info(f"📋 Case RAG Result {i+1}: {preview}")
+                    # Log truncated context preview (only first result for brevity)
+                    if i == 0:
+                        preview = content.strip()[:80] + "..." if len(content.strip()) > 80 else content.strip()
+                        logger.info(f"📋 Case RAG: {preview}")
                 
-                logger.info(f"Case RAG: Successfully processed {len(case_results)} results into context")
+                logger.info(f"📋 Found {len(case_results)} case results")
             except Exception as e:
                 logger.error(f"Case RAG error: {str(e)[:200]}{'...' if len(str(e)) > 200 else ''}")
         
         # Law RAG
         if state["is_law_rag"]:
             try:
-                logger.info("Law RAG: Initializing pipeline and searching...")
                 law_pipeline = LawRAGPipeline()
-                law_results = law_pipeline.search_by_text(user_message, limit=3)
-                logger.info(f"Law RAG: Retrieved {len(law_results)} results")
+                law_results = law_pipeline.search_by_text(user_message, limit=2)
                 
                 for i, result in enumerate(law_results):
-                    payload = result["payload"]
+                    metadata = result["metadata"]
                     content = f"""
-                    Part Section: {payload.get('part_section', '')}
-                    Law Text: {payload.get('law_text', '')}
-                    Is Chunked: {payload.get('is_chunked', False)}
-                    Chunk Index: {payload.get('chunk_index', 0)} of {payload.get('total_chunks', 1)}
+                    Part Section: {metadata.get('part_section', '')}
+                    Law Text: {result.get('content', '')}
                     """
                     
                     rag_context.append({
                         "type": "law",
-                        "content": content.strip(),
-                        "score": result.get('score', 0)
+                        "content": content.strip()
                     })
                     
-                    # Log truncated context preview
-                    preview = content.strip()[:100] + "..." if len(content.strip()) > 100 else content.strip()
-                    logger.info(f"📜 Law RAG Result {i+1}: {preview}")
+                    # Log truncated context preview (only first result for brevity)
+                    if i == 0:
+                        preview = content.strip()[:80] + "..." if len(content.strip()) > 80 else content.strip()
+                        logger.info(f"📜 Law RAG: {preview}")
                 
-                logger.info(f"Law RAG: Successfully processed {len(law_results)} results into context")
+                logger.info(f"📜 Found {len(law_results)} law results")
             except Exception as e:
                 logger.error(f"Law RAG error: {str(e)[:200]}{'...' if len(str(e)) > 200 else ''}")
         
         # Update state with RAG context
         state["rag_context"] = rag_context
-        logger.info(f"RAG node completed - total_context_items: {len(rag_context)}")
+        logger.info(f"✅ RAG completed: {len(rag_context)} total items")
         return state
     
     async def llm_node(state: ChatState) -> ChatState:
         """Node to generate LLM response"""
-        logger.info(f"LLM node starting - model: {state['llm_model_id']}, rag_items: {len(state.get('rag_context', []))}")
+        logger.info(f"🤖 LLM processing ({state['llm_model_id']}) with {len(state.get('rag_context', []))} context items")
         
         try:
             # Initialize the LLM directly
-            logger.info(f"LLM node: Initializing ChatAgent with model: {state['llm_model_id']}")
             chat_agent = ChatAgent(model_id=state["llm_model_id"])
             
             # Get the latest user message
@@ -110,16 +103,14 @@ def create_chat_workflow():
                     break
             
             # Generate response using chat agent (which handles custom_llm internally)
-            logger.info(f"LLM node: Generating response for user_message_length: {len(user_message)}")
             response_text = await chat_agent.generate_response(
                 user_input=user_message,
                 rag_context=state["rag_context"]
             )
-            logger.info(f"LLM node: Response generated successfully - length: {len(response_text)}")
+            logger.info(f"✅ Response generated ({len(response_text)} chars)")
             
             # Add AI response to messages
             from langchain_core.messages import AIMessage
-            logger.info(f"LLM node completed successfully")
             return {"messages": [AIMessage(content=response_text)]}
             
         except Exception as e:
@@ -130,7 +121,6 @@ def create_chat_workflow():
     
     def end_node(state: ChatState) -> ChatState:
         """End node - just returns the state"""
-        logger.info(f"Workflow completed - final_message_count: {len(state.get('messages', []))}")
         return state
     
     # Create the workflow graph
